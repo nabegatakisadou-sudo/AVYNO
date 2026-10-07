@@ -16,7 +16,7 @@ jobs:
         with:
           gradle-version: 8.9
       - name: Build debug APK
-        run: gradle -p android assembleDebug --no-daemon
+        run: gradle assembleDebug --no-daemon
       - uses: actions/upload-artifact@v4
         with:
           name: AIVideoEditor-debug-apk
