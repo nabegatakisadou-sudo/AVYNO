@@ -6,6 +6,8 @@ on:
         description: "Alamat backend https://... (boleh kosong dulu)"
         required: false
         default: ""
+permissions:
+  contents: write
 jobs:
   build:
     runs-on: ubuntu-24.04
@@ -18,6 +20,13 @@ jobs:
           DIR=$(dirname "$(find . -name settings.gradle.kts -not -path './.git/*' | head -n1)")
           echo "Proyek ditemukan di: $DIR"
           echo "ANDROID_DIR=$DIR" >> "$GITHUB_ENV"
+      - name: Simpan folder backend ke repo
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@users.noreply.github.com"
+          git add aivideo/backend
+          git commit -m "Ekstrak backend" || echo "tidak ada perubahan"
+          git push
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
