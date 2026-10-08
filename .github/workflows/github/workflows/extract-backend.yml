@@ -1,0 +1,18 @@
+name: Ekstrak backend
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  extract:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Ekstrak dan simpan backend
+        run: |
+          unzip -qo AIVideoEditor-Tahap1.zip 'aivideo/backend/*'
+          git config user.name "github-actions"
+          git config user.email "actions@users.noreply.github.com"
+          git add aivideo/backend
+          git commit -m "Ekstrak backend" || echo "tidak ada perubahan"
+          git push
