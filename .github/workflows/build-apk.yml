@@ -1,13 +1,23 @@
 name: Build APK
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
+    inputs:
+      base_url:
+        description: "Alamat backend https://... (boleh kosong dulu)"
+        required: false
+        default: ""
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+      - name: Cari dan siapkan proyek
+        run: |
+          shopt -s nullglob
+          for z in *.zip; do unzip -qo "$z"; done
+          DIR=$(dirname "$(find . -name settings.gradle.kts -not -path './.git/*' | head -n1)")
+          echo "Proyek ditemukan di: $DIR"
+          echo "ANDROID_DIR=$DIR" >> "$GITHUB_ENV"
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -15,9 +25,14 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: 8.9
+      - name: Setujui lisensi Android SDK
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
       - name: Build debug APK
-        run: gradle -p app assembleDebug --no-daemon
+        run: gradle -p "$ANDROID_DIR" assembleDebug --no-daemon
+        env:
+          BASE_URL: ${{ inputs.base_url }}
+          APP_TOKEN: ${{ secrets.APP_TOKEN }}
       - uses: actions/upload-artifact@v4
         with:
           name: AIVideoEditor-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: "**/build/outputs/apk/debug/*.apk"
