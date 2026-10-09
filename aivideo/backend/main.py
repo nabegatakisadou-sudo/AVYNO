@@ -44,6 +44,16 @@ STYLE_HINT = {
 async def health():
     return {"status": "ok"}
 
+@app.get("/api/ping")
+async def ping(request: Request, authorization: str = Header(default="")):
+    """Uji koneksi dari aplikasi: memastikan token cocok dan menunjukkan penyedia yang aktif (tanpa membuka kunci)."""
+    guard(request, authorization)
+    return {
+        "script": "claude" if KEY else "gemini" if GEMINI_KEY else "BELUM ADA KUNCI",
+        "tts": "openai" if TTS_KEY else "edge (gratis)",
+        "image": "openai" if IMG_KEY else "pixabay" if PIXABAY_KEY else "pexels" if PEXELS_KEY else "BELUM ADA KUNCI",
+    }
+
 async def _llm(prompt: str) -> str:
     if KEY:
         return await _anthropic(prompt)
