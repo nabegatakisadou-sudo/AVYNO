@@ -9,7 +9,6 @@ app = FastAPI(title="AI Video Backend")
 KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 MODEL = os.environ.get("SCRIPT_MODEL", "claude-sonnet-5-5")
 GEMINI_KEY = os.environ.get("GEMINI_API_KEY", "")
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 TOKEN = os.environ.get("APP_TOKEN", "")
 _hits: dict[str, list[float]] = defaultdict(list)
 
@@ -123,20 +122,41 @@ async def _anthropic(prompt: str) -> str:
         raise HTTPException(502, "Penyedia AI gagal")
     return "".join(b.get("text", "") for b in r.json()["content"])
 
+# Model Gemini berganti-ganti dan yang lama bisa dimatikan Google (gemini-2.5-flash sudah 404). Dicoba berurutan.
+GEMINI_MODELS = [m for m in [
+    os.environ.get("GEMINI_MODEL", ""), "gemini-3.1-flash-lite", "gemini-flash-latest",
+    "gemini-3-flash-preview", "gemini-flash-lite-latest", "gemini-2.5-flash-lite",
+] if m]
+_gemini_ok = ""  # model yang terakhir berhasil, dicoba lebih dulu
+
 async def _gemini(prompt: str) -> str:
     """Gratis lewat Google AI Studio (kunci tanpa kartu kredit, dibatasi laju)."""
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
+    global _gemini_ok
+    order = ([_gemini_ok] if _gemini_ok else []) + [m for m in GEMINI_MODELS if m != _gemini_ok]
+    errors = []
     async with httpx.AsyncClient(timeout=90) as c:
-        r = await c.post(url, headers={"x-goog-api-key": GEMINI_KEY},
-                         json={"contents": [{"parts": [{"text": prompt}]}],
-                               "generationConfig": {"responseMimeType": "application/json"}})
-    if r.status_code != 200:
-        raise HTTPException(502, "Penyedia AI gagal" + (" (batas gratis tercapai, coba lagi nanti)" if r.status_code == 429 else ""))
-    try:
-        parts = r.json()["candidates"][0]["content"]["parts"]
-    except (KeyError, IndexError):
-        raise HTTPException(502, "Respons AI kosong")
-    return "".join(p.get("text", "") for p in parts)
+        for model in order:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+            r = await c.post(url, headers={"x-goog-api-key": GEMINI_KEY},
+                             json={"contents": [{"parts": [{"text": prompt}]}],
+                                   "generationConfig": {"responseMimeType": "application/json"}})
+            if r.status_code == 200:
+                try:
+                    parts = r.json()["candidates"][0]["content"]["parts"]
+                except (KeyError, IndexError):
+                    errors.append(f"{model}: respons kosong")
+                    continue
+                _gemini_ok = model
+                return "".join(p.get("text", "") for p in parts)
+            msg = ""
+            try:
+                msg = str(r.json()["error"]["message"])[:110]
+            except Exception:
+                pass
+            errors.append(f"{model}: {r.status_code} {msg}")
+            if r.status_code == 401 or (r.status_code == 403 and "key" in msg.lower()):
+                break  # masalah di kunci, mengganti model tidak membantu
+    raise HTTPException(502, ("Penyedia AI gagal. " + " | ".join(errors))[:450])
 
 # Tambahkan /api/tts dan /api/image dengan pola yang sama (guard + panggil provider pilihan Anda).
 
